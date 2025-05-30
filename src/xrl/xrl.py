@@ -1,6 +1,8 @@
 import asyncio
 import redis.asyncio as redis
 
+__version__ = "0.1.0"
+
 
 class XRL:
     """
@@ -102,30 +104,30 @@ class XRL:
         return result == 0
 
 
-async def main():
-    """Example usage of the XRL rate limiter with dependency injection."""
+# async def main():
+#     """Example usage of the XRL rate limiter with dependency injection."""
 
-    # Create Redis connection (managed externally)
-    redis_client = redis.from_url("redis://localhost")
+#     # Create Redis connection (managed externally)
+#     redis_client = redis.from_url("redis://localhost")
 
-    try:
-        # Create XRL instance with dependency injection
-        xrl = XRL(redis_client)
+#     try:
+#         # Create XRL instance with dependency injection
+#         xrl = XRL(redis_client)
 
-        print("=== Testing normal rate ===")
-        await xrl.acquire_token("user:123", capacity=5, rate=1)
-        print("✅ Token acquired for normal rate!")
+#         print("=== Testing normal rate ===")
+#         await xrl.acquire_token("user:123", capacity=5, rate=1)
+#         print("✅ Token acquired for normal rate!")
 
-        # Try to acquire another token without waiting
-        if await xrl.try_acquire_token("user:123", capacity=5, rate=1):
-            print("✅ Second token acquired immediately!")
-        else:
-            print("❌ Second token not available (rate limited)")
+#         # Try to acquire another token without waiting
+#         if await xrl.try_acquire_token("user:123", capacity=5, rate=1):
+#             print("✅ Second token acquired immediately!")
+#         else:
+#             print("❌ Second token not available (rate limited)")
 
-    finally:
-        # Always close the Redis connection
-        await redis_client.aclose()
+#     finally:
+#         # Always close the Redis connection
+#         await redis_client.aclose()
 
 
-if __name__ == "__main__":
-    asyncio.run(main())
+# if __name__ == "__main__":
+#     asyncio.run(main())

@@ -17,7 +17,7 @@ async def redis_client():
     except redis.ConnectionError:
         pytest.skip("Redis server not available")
     finally:
-        await client.aclose()
+        await client.close()
 
 
 @pytest_asyncio.fixture

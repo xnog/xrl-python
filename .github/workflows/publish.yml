@@ -1,0 +1,112 @@
+name: Publish to PyPI
+
+on:
+  push:
+    tags:
+      - 'v*'  # Triggers on version tags like v1.0.0, v0.1.0, etc.
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ['3.8', '3.9', '3.10', '3.11', '3.12']
+    
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+    
+    - name: Install Poetry
+      uses: snok/install-poetry@v1
+      with:
+        version: latest
+        virtualenvs-create: true
+        virtualenvs-in-project: true
+    
+    - name: Load cached venv
+      id: cached-poetry-dependencies
+      uses: actions/cache@v3
+      with:
+        path: .venv
+        key: venv-${{ runner.os }}-${{ matrix.python-version }}-${{ hashFiles('**/poetry.lock') }}
+    
+    - name: Install dependencies
+      if: steps.cached-poetry-dependencies.outputs.cache-hit != 'true'
+      run: poetry install --with test,dev
+    
+    - name: Run tests
+      run: |
+        poetry run pytest tests/ -v
+      env:
+        REDIS_URL: redis://localhost:6379
+
+  publish:
+    needs: test
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: Install Poetry
+      uses: snok/install-poetry@v1
+      with:
+        version: latest
+        virtualenvs-create: true
+        virtualenvs-in-project: true
+    
+    - name: Extract version from tag
+      id: get_version
+      run: |
+        # Remove 'v' prefix from tag to get version
+        VERSION=${GITHUB_REF#refs/tags/v}
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+        echo "Version: $VERSION"
+    
+    - name: Update version in package files
+      run: |
+        # Update version in pyproject.toml
+        poetry version ${{ steps.get_version.outputs.version }}
+        
+        # Update version in __init__.py
+        sed -i 's/__version__ = ".*"/__version__ = "${{ steps.get_version.outputs.version }}"/' src/xrl/__init__.py
+        sed -i 's/__version__ = ".*"/__version__ = "${{ steps.get_version.outputs.version }}"/' src/xrl/xrl.py
+        
+        # Show updated versions
+        echo "pyproject.toml version:"
+        poetry version
+        echo "Package versions:"
+        cat src/xrl/__init__.py | grep __version__
+        cat src/xrl/xrl.py | grep __version__
+    
+    - name: Build package
+      run: poetry build
+    
+    - name: Check package
+      run: |
+        poetry run pip install twine
+        poetry run twine check dist/*
+    
+    - name: Publish to PyPI
+      uses: pypa/gh-action-pypi-publish@release/v1
+      with:
+        password: ${{ secrets.PYPI_API_TOKEN }} 
