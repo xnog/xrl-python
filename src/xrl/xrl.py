@@ -1,4 +1,5 @@
 import asyncio
+
 import redis.asyncio as redis
 
 __version__ = "0.1.0"
@@ -19,7 +20,7 @@ class XRL:
 
     local tokens_key = key
     local timestamp_key = key .. ":timestamp"
-    
+
     -- Dynamic TTL: time to fill the bucket + buffer
     -- Minimum 60 seconds, maximum 24 hours (86400 seconds)
     local ttl = math.max(60, math.min(86400, math.ceil(capacity / rate) + 300))
@@ -101,7 +102,7 @@ class XRL:
             True if token was acquired, False if rate limited
         """
         result = await self.script(keys=[key], args=[capacity, rate])
-        return result == 0
+        return int(result) == 0
 
 
 # async def main():
