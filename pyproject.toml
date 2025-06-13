@@ -1,7 +1,7 @@
 [tool.poetry]
 name = "xrl-python"
-version = "0.1.1"
-description = "eXtended Rate Limiter - A distributed rate limiter using Redis token bucket algorithm"
+version = "0.2.0"
+description = "eXtended Rate Limiter - A distributed rate limiter with multiple algorithms (Token Bucket and Fixed Window)"
 authors = ["Felipe Nogueira Gaudio <xnogueira@gmail.com>"]
 maintainers = ["Felipe Nogueira Gaudio <xnogueira@gmail.com>"]
 license = "MIT"
@@ -9,7 +9,7 @@ readme = "README.md"
 homepage = "https://github.com/xnog/xrl-python"
 repository = "https://github.com/xnog/xrl-python"
 documentation = "https://github.com/xnog/xrl-python#readme"
-keywords = ["rate-limiting", "redis", "distributed", "token-bucket", "async"]
+keywords = ["rate-limiting", "redis", "distributed", "token-bucket", "fixed-window", "async"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",

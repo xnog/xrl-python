@@ -1,13 +1,10 @@
 import asyncio
-
 import redis.asyncio as redis
+from .base import BaseRateLimiter
 
-__version__ = "0.1.0"
-
-
-class XRL:
+class TokenBucketRateLimiter(BaseRateLimiter):
     """
-    eXtended Rate Limiter - A distributed rate limiter using Redis token bucket algorithm.
+    Token Bucket Rate Limiter - A distributed rate limiter using Redis token bucket algorithm.
 
     This class provides rate limiting functionality with configurable capacity and refill rates.
     It uses Redis Lua scripts for atomic operations to ensure consistency in distributed environments.
@@ -48,12 +45,12 @@ class XRL:
 
     def __init__(self, redis_client: redis.Redis):
         """
-        Initialize the XRL rate limiter.
+        Initialize the Token Bucket rate limiter.
 
         Args:
             redis_client: redis.asyncio.Redis instance
         """
-        self.redis = redis_client
+        super().__init__(redis_client)
         self.script = redis_client.register_script(self.LUA_SCRIPT)
 
     async def acquire_token(self, key: str, capacity: int, rate: float) -> bool:
@@ -82,12 +79,19 @@ class XRL:
             await xrl.acquire_token("user:abc", capacity=200, rate=200)
         """
         retry_interval = 1.0 / rate
+        attempt = 1
 
         while True:
+            self.logger.debug(f"Attempt {attempt} to acquire token for key '{key}' (capacity={capacity}, rate={rate})")
             result = await self.script(keys=[key], args=[capacity, rate])
+            
             if result == 0:
+                self.logger.debug(f"Token acquired for key '{key}' on attempt {attempt}")
                 return True  # Token acquired
+            
+            self.logger.debug(f"Rate limited for key '{key}', waiting {retry_interval:.2f}s before retry")
             await asyncio.sleep(retry_interval)  # Wait and retry
+            attempt += 1
 
     async def try_acquire_token(self, key: str, capacity: int, rate: float) -> bool:
         """
@@ -101,34 +105,8 @@ class XRL:
         Returns:
             True if token was acquired, False if rate limited
         """
+        self.logger.debug(f"Trying to acquire token for key '{key}' (capacity={capacity}, rate={rate})")
         result = await self.script(keys=[key], args=[capacity, rate])
-        return int(result) == 0
-
-
-# async def main():
-#     """Example usage of the XRL rate limiter with dependency injection."""
-
-#     # Create Redis connection (managed externally)
-#     redis_client = redis.from_url("redis://localhost")
-
-#     try:
-#         # Create XRL instance with dependency injection
-#         xrl = XRL(redis_client)
-
-#         print("=== Testing normal rate ===")
-#         await xrl.acquire_token("user:123", capacity=5, rate=1)
-#         print("✅ Token acquired for normal rate!")
-
-#         # Try to acquire another token without waiting
-#         if await xrl.try_acquire_token("user:123", capacity=5, rate=1):
-#             print("✅ Second token acquired immediately!")
-#         else:
-#             print("❌ Second token not available (rate limited)")
-
-#     finally:
-#         # Always close the Redis connection
-#         await redis_client.aclose()
-
-
-# if __name__ == "__main__":
-#     asyncio.run(main())
+        success = int(result) == 0
+        self.logger.debug(f"{'Token acquired' if success else 'Rate limited'} for key '{key}'")
+        return success 

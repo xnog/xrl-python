@@ -1,10 +1,16 @@
 """
 XRL - eXtended Rate Limiter
-
-A distributed rate limiter using Redis token bucket algorithm.
+A distributed rate limiter library with multiple algorithms.
 """
 
-from .xrl import XRL
+from .base import BaseRateLimiter
+from .token_bucket import TokenBucketRateLimiter
+from .fixed_window import FixedWindowRateLimiter
 
-__version__ = "0.1.0"
-__all__ = ["XRL"]
+__version__ = "0.2.0"
+
+__all__ = [
+    "BaseRateLimiter",
+    "TokenBucketRateLimiter",
+    "FixedWindowRateLimiter",
+]

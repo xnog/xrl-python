@@ -4,16 +4,19 @@
 [![Python Support](https://img.shields.io/pypi/pyversions/xrl-python.svg)](https://pypi.org/project/xrl-python/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-A distributed rate limiter using Redis token bucket algorithm for Python applications.
+A distributed rate limiter with multiple algorithms (Token Bucket and Fixed Window) for Python applications.
 
 ## Features
 
+- **Multiple Algorithms**:
+  - **Token Bucket**: Smooth rate limiting with burst capacity
+  - **Fixed Window**: Simple time-window based rate limiting
 - **Distributed**: Works across multiple application instances using Redis
-- **Token Bucket Algorithm**: Smooth rate limiting with burst capacity
 - **Async/Await Support**: Built for modern Python async applications
 - **Configurable**: Flexible capacity and refill rates
 - **Atomic Operations**: Uses Redis Lua scripts for consistency
 - **Auto-expiring Keys**: Automatic cleanup of unused rate limit keys
+- **Debug Logging**: Built-in logging for monitoring rate limit operations
 
 ## Installation
 
@@ -26,21 +29,25 @@ pip install xrl-python
 ```python
 import asyncio
 import redis.asyncio as redis
-from xrl import XRL
+from xrl import TokenBucketRateLimiter, FixedWindowRateLimiter
 
 async def main():
     # Create Redis connection
     redis_client = redis.from_url("redis://localhost")
     
-    # Create XRL instance
-    xrl = XRL(redis_client)
+    # Choose your rate limiter implementation
+    # Token Bucket (smoother rate limiting with burst capacity)
+    limiter = TokenBucketRateLimiter(redis_client)
+    
+    # Or Fixed Window (simple time-window based)
+    # limiter = FixedWindowRateLimiter(redis_client)
     
     # Acquire a token (blocks until available)
-    await xrl.acquire_token("user:123", capacity=100, rate=10)
+    await limiter.acquire_token("user:123", capacity=100, rate=10)
     print("✅ Request allowed!")
     
     # Try to acquire without blocking
-    if await xrl.try_acquire_token("user:123", capacity=100, rate=10):
+    if await limiter.try_acquire_token("user:123", capacity=100, rate=10):
         print("✅ Token acquired immediately!")
     else:
         print("❌ Rate limited")
@@ -53,20 +60,42 @@ if __name__ == "__main__":
 
 ## Usage Examples
 
-### Basic Rate Limiting
+### Token Bucket Rate Limiter
 
 ```python
 import asyncio
 import redis.asyncio as redis
-from xrl import XRL
+from xrl import TokenBucketRateLimiter
 
 async def rate_limited_api():
     redis_client = redis.from_url("redis://localhost")
-    xrl = XRL(redis_client)
+    limiter = TokenBucketRateLimiter(redis_client)
     
     try:
         # 100 requests per minute (100/60 = 1.67 tokens per second)
-        await xrl.acquire_token("api:endpoint", capacity=100, rate=100/60)
+        await limiter.acquire_token("api:endpoint", capacity=100, rate=100/60)
+        
+        # Your API logic here
+        return {"status": "success"}
+        
+    finally:
+        await redis_client.aclose()
+```
+
+### Fixed Window Rate Limiter
+
+```python
+import asyncio
+import redis.asyncio as redis
+from xrl import FixedWindowRateLimiter
+
+async def rate_limited_api():
+    redis_client = redis.from_url("redis://localhost")
+    limiter = FixedWindowRateLimiter(redis_client)
+    
+    try:
+        # 100 requests per minute
+        await limiter.acquire_token("api:endpoint", capacity=100, rate=100/60)
         
         # Your API logic here
         return {"status": "success"}
@@ -80,14 +109,14 @@ async def rate_limited_api():
 ```python
 async def user_rate_limit(user_id: str):
     redis_client = redis.from_url("redis://localhost")
-    xrl = XRL(redis_client)
+    limiter = TokenBucketRateLimiter(redis_client)  # or FixedWindowRateLimiter
     
     try:
         # Different limits per user
         user_key = f"user:{user_id}"
         
         # 200 requests per minute for this user
-        await xrl.acquire_token(user_key, capacity=200, rate=200/60)
+        await limiter.acquire_token(user_key, capacity=200, rate=200/60)
         
         return process_user_request(user_id)
         
@@ -100,11 +129,11 @@ async def user_rate_limit(user_id: str):
 ```python
 async def try_process_request(request_id: str):
     redis_client = redis.from_url("redis://localhost")
-    xrl = XRL(redis_client)
+    limiter = TokenBucketRateLimiter(redis_client)  # or FixedWindowRateLimiter
     
     try:
         # Try to acquire token without waiting
-        if await xrl.try_acquire_token(f"request:{request_id}", capacity=50, rate=5):
+        if await limiter.try_acquire_token(f"request:{request_id}", capacity=50, rate=5):
             return await process_request(request_id)
         else:
             return {"error": "Rate limit exceeded", "retry_after": 1}
@@ -115,11 +144,13 @@ async def try_process_request(request_id: str):
 
 ## API Reference
 
-### XRL Class
+### BaseRateLimiter Class
+
+Base class for all rate limiter implementations.
 
 #### `__init__(redis_client: redis.Redis)`
 
-Initialize the XRL rate limiter.
+Initialize the rate limiter.
 
 **Parameters:**
 - `redis_client`: An instance of `redis.asyncio.Redis`
@@ -130,8 +161,8 @@ Acquire a token, waiting if necessary until one becomes available.
 
 **Parameters:**
 - `key`: Unique identifier for the rate limit bucket
-- `capacity`: Maximum number of tokens in the bucket
-- `rate`: Token refill rate (tokens per second)
+- `capacity`: Maximum number of tokens/requests allowed
+- `rate`: Token refill rate or requests per second
 
 **Returns:**
 - `True` when a token is successfully acquired
@@ -142,11 +173,25 @@ Try to acquire a token without waiting.
 
 **Parameters:**
 - `key`: Unique identifier for the rate limit bucket
-- `capacity`: Maximum number of tokens in the bucket  
-- `rate`: Token refill rate (tokens per second)
+- `capacity`: Maximum number of tokens/requests allowed
+- `rate`: Token refill rate or requests per second
 
 **Returns:**
 - `True` if token was acquired, `False` if rate limited
+
+### TokenBucketRateLimiter
+
+Smooth rate limiting with burst capacity. Best for:
+- APIs that need to handle bursts of traffic
+- Applications requiring precise rate control
+- Scenarios where you want to allow some burst capacity
+
+### FixedWindowRateLimiter
+
+Simple time-window based rate limiting. Best for:
+- Simple rate limiting needs
+- When burst capacity is not required
+- When you want to reset limits at fixed intervals
 
 ## Rate Calculation Examples
 
@@ -168,8 +213,9 @@ rate = 1 / 5  # 0.2 tokens per second
 
 XRL requires a Redis server. The rate limiter uses:
 
-- **Keys**: `{your_key}` and `{your_key}:timestamp`
-- **TTL**: Automatically set based on bucket refill time (60s minimum, 24h maximum)
+- **Keys**: `{your_key}` and `{your_key}:timestamp` (Token Bucket)
+- **Keys**: `{your_key}:{window_start}` (Fixed Window)
+- **TTL**: Automatically set based on bucket refill time or window size
 - **Memory**: Minimal - only stores token count and timestamp per key
 
 ## Error Handling
@@ -180,9 +226,9 @@ import redis.exceptions
 async def robust_rate_limiting():
     try:
         redis_client = redis.from_url("redis://localhost")
-        xrl = XRL(redis_client)
+        limiter = TokenBucketRateLimiter(redis_client)  # or FixedWindowRateLimiter
         
-        await xrl.acquire_token("key", capacity=100, rate=10)
+        await limiter.acquire_token("key", capacity=100, rate=10)
         
     except redis.exceptions.ConnectionError:
         # Handle Redis connection issues
