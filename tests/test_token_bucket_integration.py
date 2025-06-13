@@ -134,8 +134,9 @@ class TestTokenBucketIntegration:
         await redis_client.delete(key, f"{key}:timestamp")
 
         # Should be able to acquire multiple tokens up to capacity immediately
+        # Use zero refill rate to prevent tokens from being added during the test
         capacity = 5
-        rate = 1.0
+        rate = 0.0  # No refill during test to ensure exact count
 
         successful_acquisitions = 0
         for _ in range(capacity + 2):  # Try more than capacity
@@ -175,10 +176,9 @@ class TestTokenBucketIntegration:
         # Clean up any existing data
         await redis_client.delete(key, f"{key}:timestamp")
 
-        # Use a conservative rate for testing: 1 token per second
-        # This ensures no token refill during the brief test execution time
+        # Use zero refill rate to prevent tokens from being added during the test
         capacity = 5
-        rate = 1.0
+        rate = 0.0  # No refill during test to ensure exact count
 
         # Should be able to acquire tokens up to capacity quickly
         successful_acquisitions = 0
