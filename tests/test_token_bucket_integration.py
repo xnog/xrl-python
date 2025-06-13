@@ -41,11 +41,11 @@ class TestTokenBucketIntegration:
         # Should be able to acquire tokens up to capacity immediately
         capacity = 5
         for i in range(capacity):
-            result = await rate_limiter.try_acquire_token(key, capacity=capacity, rate=1.0)
+            result = await rate_limiter.try_acquire_token(key, capacity=capacity, refill_rate=1.0)
             assert result is True, f"Token {i+1} should be acquired immediately"
 
         # Should be rate limited after exhausting capacity
-        result = await rate_limiter.try_acquire_token(key, capacity=capacity, rate=1.0)
+        result = await rate_limiter.try_acquire_token(key, capacity=capacity, refill_rate=1.0)
         assert result is False, "Should be rate limited after exhausting capacity"
 
     @pytest.mark.asyncio
@@ -61,11 +61,11 @@ class TestTokenBucketIntegration:
         rate = 2.0  # 2 tokens per second (0.5 seconds per token)
 
         for i in range(capacity):
-            result = await rate_limiter.try_acquire_token(key, capacity=capacity, rate=rate)
+            result = await rate_limiter.try_acquire_token(key, capacity=capacity, refill_rate=rate)
             assert result is True, f"Token {i+1} should be acquired immediately"
 
         # Should be rate limited after exhausting capacity
-        result = await rate_limiter.try_acquire_token(key, capacity=capacity, rate=rate)
+        result = await rate_limiter.try_acquire_token(key, capacity=capacity, refill_rate=rate)
         assert result is False, "Should be rate limited after exhausting capacity"
 
         # Wait for token refill - since Redis TIME has second precision,
@@ -73,7 +73,7 @@ class TestTokenBucketIntegration:
         await asyncio.sleep(1.1)
 
         # Should be able to acquire token again after refill
-        result = await rate_limiter.try_acquire_token(key, capacity=capacity, rate=rate)
+        result = await rate_limiter.try_acquire_token(key, capacity=capacity, refill_rate=rate)
         assert result is True, "Should be able to acquire token after refill"
 
     @pytest.mark.asyncio
@@ -88,12 +88,12 @@ class TestTokenBucketIntegration:
         capacity = 1
         rate = 1.0  # 1 token per second (1 second per token)
 
-        result = await rate_limiter.try_acquire_token(key, capacity=capacity, rate=rate)
+        result = await rate_limiter.try_acquire_token(key, capacity=capacity, refill_rate=rate)
         assert result is True, "First token should be acquired immediately"
 
         # This should wait and then succeed
         start_time = time.time()
-        result = await rate_limiter.acquire_token(key, capacity=capacity, rate=rate)
+        result = await rate_limiter.acquire_token(key, capacity=capacity, refill_rate=rate)
         end_time = time.time()
 
         assert result is True, "Token should be acquired after waiting"
@@ -112,15 +112,15 @@ class TestTokenBucketIntegration:
         await redis_client.delete(key2, f"{key2}:timestamp")
 
         # Both users should be able to acquire tokens
-        result1 = await rate_limiter.try_acquire_token(key1, capacity=1, rate=1.0)
-        result2 = await rate_limiter.try_acquire_token(key2, capacity=1, rate=1.0)
+        result1 = await rate_limiter.try_acquire_token(key1, capacity=1, refill_rate=1.0)
+        result2 = await rate_limiter.try_acquire_token(key2, capacity=1, refill_rate=1.0)
 
         assert result1 is True
         assert result2 is True
 
         # Both should be rate limited for second attempt
-        result1 = await rate_limiter.try_acquire_token(key1, capacity=1, rate=1.0)
-        result2 = await rate_limiter.try_acquire_token(key2, capacity=1, rate=1.0)
+        result1 = await rate_limiter.try_acquire_token(key1, capacity=1, refill_rate=1.0)
+        result2 = await rate_limiter.try_acquire_token(key2, capacity=1, refill_rate=1.0)
 
         assert result1 is False
         assert result2 is False
@@ -139,7 +139,7 @@ class TestTokenBucketIntegration:
 
         successful_acquisitions = 0
         for _ in range(capacity + 2):  # Try more than capacity
-            result = await rate_limiter.try_acquire_token(key, capacity=capacity, rate=rate)
+            result = await rate_limiter.try_acquire_token(key, capacity=capacity, refill_rate=rate)
             if result:
                 successful_acquisitions += 1
 
@@ -155,7 +155,7 @@ class TestTokenBucketIntegration:
         await redis_client.delete(key, f"{key}:timestamp")
 
         # Acquire a token
-        await rate_limiter.try_acquire_token(key, capacity=10, rate=1.0)
+        await rate_limiter.try_acquire_token(key, capacity=10, refill_rate=1.0)
 
         # Check that keys exist and have TTL
         tokens_ttl = await redis_client.ttl(key)
@@ -183,7 +183,7 @@ class TestTokenBucketIntegration:
         # Should be able to acquire tokens up to capacity quickly
         successful_acquisitions = 0
         for _ in range(capacity):
-            result = await rate_limiter.try_acquire_token(key, capacity=capacity, rate=rate)
+            result = await rate_limiter.try_acquire_token(key, capacity=capacity, refill_rate=rate)
             if result:
                 successful_acquisitions += 1
 
@@ -191,7 +191,7 @@ class TestTokenBucketIntegration:
 
         # Immediately try to acquire another token - should be rate limited
         # since we just exhausted all tokens
-        result = await rate_limiter.try_acquire_token(key, capacity=capacity, rate=rate)
+        result = await rate_limiter.try_acquire_token(key, capacity=capacity, refill_rate=rate)
         assert result is False, "Should be rate limited immediately after exhausting capacity"
 
     @pytest.mark.asyncio
@@ -209,7 +209,7 @@ class TestTokenBucketIntegration:
         # Create multiple concurrent requests
         tasks = []
         for _ in range(15):  # More than capacity
-            task = rate_limiter.try_acquire_token(key, capacity=capacity, rate=rate)
+            task = rate_limiter.try_acquire_token(key, capacity=capacity, refill_rate=rate)
             tasks.append(task)
 
         results = await asyncio.gather(*tasks)
@@ -231,18 +231,18 @@ class TestTokenBucketIntegration:
         rate = 0.5
 
         # First token should be available immediately
-        result = await rate_limiter.try_acquire_token(key, capacity=capacity, rate=rate)
+        result = await rate_limiter.try_acquire_token(key, capacity=capacity, refill_rate=rate)
         assert result is True, "First token should be available"
 
         # Second attempt should be rate limited
-        result = await rate_limiter.try_acquire_token(key, capacity=capacity, rate=rate)
+        result = await rate_limiter.try_acquire_token(key, capacity=capacity, refill_rate=rate)
         assert result is False, "Should be rate limited"
 
         # Wait for refill (2+ seconds for 0.5 rate)
         await asyncio.sleep(2.1)
 
         # Should be able to acquire token again
-        result = await rate_limiter.try_acquire_token(key, capacity=capacity, rate=rate)
+        result = await rate_limiter.try_acquire_token(key, capacity=capacity, refill_rate=rate)
         assert result is True, "Should be able to acquire token after refill"
 
     @pytest.mark.asyncio
@@ -259,22 +259,22 @@ class TestTokenBucketIntegration:
 
         # Acquire all tokens immediately (burst)
         for i in range(capacity):
-            result = await rate_limiter.try_acquire_token(key, capacity=capacity, rate=rate)
+            result = await rate_limiter.try_acquire_token(key, capacity=capacity, refill_rate=rate)
             assert result is True, f"Token {i+1} should be acquired in burst"
 
         # Should be rate limited now
-        result = await rate_limiter.try_acquire_token(key, capacity=capacity, rate=rate)
+        result = await rate_limiter.try_acquire_token(key, capacity=capacity, refill_rate=rate)
         assert result is False, "Should be rate limited after burst"
 
         # Wait for refill (1+ seconds should give at least 2 tokens)
         await asyncio.sleep(1.1)
 
         # Should be able to acquire tokens again after refill
-        result = await rate_limiter.try_acquire_token(key, capacity=capacity, rate=rate)
+        result = await rate_limiter.try_acquire_token(key, capacity=capacity, refill_rate=rate)
         assert result is True, "Should acquire token after refill"
 
         # Should be able to acquire another token since we waited long enough
-        result = await rate_limiter.try_acquire_token(key, capacity=capacity, rate=rate)
+        result = await rate_limiter.try_acquire_token(key, capacity=capacity, refill_rate=rate)
         assert result is True, "Should acquire second token after refill"
 
     @pytest.mark.asyncio
@@ -291,13 +291,10 @@ class TestTokenBucketIntegration:
 
         # Should be able to handle large burst immediately
         successful_acquisitions = 0
-        for _ in range(capacity):
-            result = await rate_limiter.try_acquire_token(key, capacity=capacity, rate=rate)
+        for _ in range(capacity + 5):  # Try more than capacity
+            result = await rate_limiter.try_acquire_token(key, capacity=capacity, refill_rate=rate)
             if result:
                 successful_acquisitions += 1
 
-        assert successful_acquisitions == capacity, "Should handle full capacity burst"
-
-        # Should be rate limited after burst
-        result = await rate_limiter.try_acquire_token(key, capacity=capacity, rate=rate)
-        assert result is False, "Should be rate limited after large burst" 
+        # Should have exactly 'capacity' successful acquisitions
+        assert successful_acquisitions == capacity, "Should handle exactly the capacity in burst" 

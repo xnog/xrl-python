@@ -33,7 +33,7 @@ class TestTokenBucketInitialization:
         script = TokenBucketRateLimiter.LUA_SCRIPT
         assert "local key = KEYS[1]" in script
         assert "local capacity = tonumber(ARGV[1])" in script
-        assert "local rate = tonumber(ARGV[2])" in script
+        assert "local refill_rate = tonumber(ARGV[2])" in script
         assert "tokens" in script
         assert "timestamp" in script
         assert "return 0" in script  # allowed
@@ -49,7 +49,7 @@ class TestTryAcquireToken:
         # Mock script to return 0 (allowed)
         rate_limiter.script = AsyncMock(return_value=0)
 
-        result = await rate_limiter.try_acquire_token("user:123", capacity=10, rate=1.0)
+        result = await rate_limiter.try_acquire_token("user:123", capacity=10, refill_rate=1.0)
 
         assert result is True
         rate_limiter.script.assert_called_once_with(
@@ -61,7 +61,7 @@ class TestTryAcquireToken:
         # Mock script to return 1 (rate limited)
         rate_limiter.script = AsyncMock(return_value=1)
 
-        result = await rate_limiter.try_acquire_token("user:456", capacity=5, rate=2.0)
+        result = await rate_limiter.try_acquire_token("user:456", capacity=5, refill_rate=2.0)
 
         assert result is False
         rate_limiter.script.assert_called_once_with(
@@ -72,8 +72,8 @@ class TestTryAcquireToken:
         """Test that different keys are handled independently."""
         rate_limiter.script = AsyncMock(return_value=0)
 
-        await rate_limiter.try_acquire_token("user:123", capacity=10, rate=1.0)
-        await rate_limiter.try_acquire_token("user:456", capacity=20, rate=2.0)
+        await rate_limiter.try_acquire_token("user:123", capacity=10, refill_rate=1.0)
+        await rate_limiter.try_acquire_token("user:456", capacity=20, refill_rate=2.0)
 
         assert rate_limiter.script.call_count == 2
         calls = rate_limiter.script.call_args_list
@@ -89,7 +89,7 @@ class TestAcquireToken:
         """Test immediate token acquisition without waiting."""
         rate_limiter.script = AsyncMock(return_value=0)
 
-        result = await rate_limiter.acquire_token("user:123", capacity=10, rate=1.0)
+        result = await rate_limiter.acquire_token("user:123", capacity=10, refill_rate=1.0)
 
         assert result is True
         rate_limiter.script.assert_called_once_with(
@@ -102,7 +102,7 @@ class TestAcquireToken:
         rate_limiter.script = AsyncMock(side_effect=[1, 0])
 
         with patch('asyncio.sleep', new_callable=AsyncMock) as mock_sleep:
-            result = await rate_limiter.acquire_token("user:123", capacity=10, rate=2.0)
+            result = await rate_limiter.acquire_token("user:123", capacity=10, refill_rate=2.0)
 
         assert result is True
         assert rate_limiter.script.call_count == 2
@@ -115,7 +115,7 @@ class TestAcquireToken:
         rate_limiter.script = AsyncMock(side_effect=[1, 1, 0])
 
         with patch('asyncio.sleep', new_callable=AsyncMock) as mock_sleep:
-            result = await rate_limiter.acquire_token("user:123", capacity=5, rate=5.0)
+            result = await rate_limiter.acquire_token("user:123", capacity=5, refill_rate=5.0)
 
         assert result is True
         assert rate_limiter.script.call_count == 3
@@ -136,7 +136,7 @@ class TestAcquireToken:
             # Create fresh mock for each iteration
             rate_limiter.script = AsyncMock(side_effect=[1, 0])
             with patch('asyncio.sleep', new_callable=AsyncMock) as mock_sleep:
-                await rate_limiter.acquire_token("user:test", capacity=10, rate=rate)
+                await rate_limiter.acquire_token("user:test", capacity=10, refill_rate=rate)
                 mock_sleep.assert_called_once_with(expected_interval)
 
 
@@ -153,7 +153,7 @@ class TestTokenBucketSpecific:
         rate = 1.0
         
         for i in range(capacity):
-            result = await rate_limiter.try_acquire_token("user:burst", capacity=capacity, rate=rate)
+            result = await rate_limiter.try_acquire_token("user:burst", capacity=capacity, refill_rate=rate)
             assert result is True
 
         # Verify all calls were made
@@ -166,7 +166,7 @@ class TestTokenBucketSpecific:
 
         with patch('asyncio.sleep', new_callable=AsyncMock) as mock_sleep:
             # Rate of 0.5 tokens per second = 2 seconds per token
-            await rate_limiter.acquire_token("user:fractional", capacity=1, rate=0.5)
+            await rate_limiter.acquire_token("user:fractional", capacity=1, refill_rate=0.5)
 
         mock_sleep.assert_called_once_with(2.0)  # 1.0 / 0.5 = 2.0
 
@@ -186,7 +186,7 @@ class TestRedisIntegration:
         """Test that script is called with correct parameters."""
         rate_limiter.script = AsyncMock(return_value=0)
 
-        await rate_limiter.try_acquire_token("test:key", capacity=100, rate=5.5)
+        await rate_limiter.try_acquire_token("test:key", capacity=100, refill_rate=5.5)
 
         rate_limiter.script.assert_called_once_with(
             keys=["test:key"],
@@ -202,7 +202,7 @@ class TestEdgeCases:
         """Test behavior with zero capacity."""
         rate_limiter.script = AsyncMock(return_value=1)  # Should be rate limited
 
-        result = await rate_limiter.try_acquire_token("user:123", capacity=0, rate=1.0)
+        result = await rate_limiter.try_acquire_token("user:123", capacity=0, refill_rate=1.0)
 
         assert result is False
         rate_limiter.script.assert_called_once_with(
@@ -214,7 +214,7 @@ class TestEdgeCases:
         rate_limiter.script = AsyncMock(return_value=0)
 
         # This should work but with infinite retry interval
-        result = await rate_limiter.try_acquire_token("user:123", capacity=10, rate=0.0)
+        result = await rate_limiter.try_acquire_token("user:123", capacity=10, refill_rate=0.0)
 
         assert result is True
 
@@ -224,7 +224,7 @@ class TestEdgeCases:
         rate_limiter.script = AsyncMock(side_effect=[1, 0])
 
         with patch('asyncio.sleep', new_callable=AsyncMock) as mock_sleep:
-            result = await rate_limiter.acquire_token("user:123", capacity=10, rate=1000.0)
+            result = await rate_limiter.acquire_token("user:123", capacity=10, refill_rate=1000.0)
 
         assert result is True
         mock_sleep.assert_called_once_with(0.001)  # 1.0 / 1000.0
@@ -234,7 +234,7 @@ class TestEdgeCases:
         """Test behavior with empty key."""
         rate_limiter.script = AsyncMock(return_value=0)
 
-        result = await rate_limiter.try_acquire_token("", capacity=10, rate=1.0)
+        result = await rate_limiter.try_acquire_token("", capacity=10, refill_rate=1.0)
 
         assert result is True
         rate_limiter.script.assert_called_once_with(keys=[""], args=[10, 1.0])
@@ -245,7 +245,7 @@ class TestEdgeCases:
         rate_limiter.script = AsyncMock(return_value=0)
         special_key = "user:123@domain.com:action/test"
 
-        result = await rate_limiter.try_acquire_token(special_key, capacity=5, rate=2.0)
+        result = await rate_limiter.try_acquire_token(special_key, capacity=5, refill_rate=2.0)
 
         assert result is True
         rate_limiter.script.assert_called_once_with(
@@ -265,7 +265,7 @@ class TestRealWorldScenarios:
         rate = rpm / 60.0
         capacity = rpm
 
-        result = await rate_limiter.try_acquire_token("user:rpm", capacity=capacity, rate=rate)
+        result = await rate_limiter.try_acquire_token("user:rpm", capacity=capacity, refill_rate=rate)
 
         assert result is True
         rate_limiter.script.assert_called_once_with(
@@ -280,7 +280,7 @@ class TestRealWorldScenarios:
         rps = 10
         capacity = rps
 
-        result = await rate_limiter.try_acquire_token("user:rps", capacity=capacity, rate=rps)
+        result = await rate_limiter.try_acquire_token("user:rps", capacity=capacity, refill_rate=rps)
 
         assert result is True
         rate_limiter.script.assert_called_once_with(
@@ -297,7 +297,7 @@ class TestRealWorldScenarios:
 
         # Should allow immediate burst
         for _ in range(capacity):
-            result = await rate_limiter.try_acquire_token("user:burst", capacity=capacity, rate=rate)
+            result = await rate_limiter.try_acquire_token("user:burst", capacity=capacity, refill_rate=rate)
             assert result is True
 
         assert rate_limiter.script.call_count == capacity
@@ -314,7 +314,7 @@ class TestConcurrency:
         # Simulate concurrent requests
         tasks = []
         for _ in range(5):
-            task = rate_limiter.try_acquire_token("user:concurrent", capacity=10, rate=5.0)
+            task = rate_limiter.try_acquire_token("user:concurrent", capacity=10, refill_rate=5.0)
             tasks.append(task)
 
         results = await asyncio.gather(*tasks)
@@ -331,7 +331,7 @@ class TestConcurrency:
         # Simulate concurrent requests for different users
         tasks = []
         for i in range(5):
-            task = rate_limiter.try_acquire_token(f"user:{i}", capacity=10, rate=2.0)
+            task = rate_limiter.try_acquire_token(f"user:{i}", capacity=10, refill_rate=2.0)
             tasks.append(task)
 
         results = await asyncio.gather(*tasks)

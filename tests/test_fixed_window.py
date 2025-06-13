@@ -32,7 +32,7 @@ class TestFixedWindowInitialization:
         """Test that the Lua script contains expected components for fixed window."""
         script = FixedWindowRateLimiter.LUA_SCRIPT
         assert "local key = KEYS[1]" in script
-        assert "local capacity = tonumber(ARGV[1])" in script
+        assert "local limit = tonumber(ARGV[1])" in script
         assert "local window_size = tonumber(ARGV[2])" in script
         assert "window_start" in script
         assert "incr" in script

@@ -267,16 +267,13 @@ class TestFixedWindowIntegration:
 
         # Should be able to make all requests immediately
         successful_requests = 0
-        for _ in range(capacity):
+        for _ in range(capacity + 5):  # Try more than capacity
             result = await rate_limiter.try_acquire_token(key, capacity=capacity, rate=rate)
             if result:
                 successful_requests += 1
 
-        assert successful_requests == capacity, "Should handle high capacity in single window"
-
-        # Should be rate limited after exhausting capacity
-        result = await rate_limiter.try_acquire_token(key, capacity=capacity, rate=rate)
-        assert result is False, "Should be rate limited after exhausting high capacity"
+        # Should have exactly 'capacity' successful requests
+        assert successful_requests == capacity, "Should handle exactly the capacity in single window"
 
     @pytest.mark.asyncio
     async def test_multiple_windows_over_time(self, rate_limiter, redis_client):
