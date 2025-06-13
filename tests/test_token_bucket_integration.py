@@ -286,8 +286,9 @@ class TestTokenBucketIntegration:
         await redis_client.delete(key, f"{key}:timestamp")
 
         # Large capacity allows for significant burst
+        # Use zero refill rate to prevent tokens from being added during the test
         capacity = 100
-        rate = 10.0  # 10 tokens per second
+        rate = 0.0  # No refill during test to ensure exact count
 
         # Should be able to handle large burst immediately
         successful_acquisitions = 0

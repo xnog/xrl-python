@@ -163,8 +163,9 @@ class TestFixedWindowIntegration:
         await redis_client.delete(f"{key}:*")
 
         # Use a capacity that allows some concurrent requests
+        # Use a very low rate to create a large window (60 seconds) to avoid boundary issues
         capacity = 10
-        rate = 1.0  # 1 second window
+        rate = 0.1  # 0.1 RPS = 10 second window, large enough to avoid timing issues
 
         # Create multiple concurrent requests
         tasks = []
