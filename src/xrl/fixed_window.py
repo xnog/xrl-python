@@ -69,7 +69,7 @@ class FixedWindowRateLimiter(BaseRateLimiter):
             await xrl.acquire_token("user:abc", capacity=200, rate=200)
         """
         window_size = 1.0  # Default to 1 second window
-        if rate < 1:
+        if rate < 1 and rate > 0:
             window_size = 1.0 / rate  # For rates less than 1 per second, use larger window
 
         attempt = 1
@@ -98,7 +98,7 @@ class FixedWindowRateLimiter(BaseRateLimiter):
             True if request is allowed, False if rate limited
         """
         window_size = 1.0  # Default to 1 second window
-        if rate < 1:
+        if rate < 1 and rate > 0:
             window_size = 1.0 / rate  # For rates less than 1 per second, use larger window
 
         self.logger.debug(f"Trying to acquire token for key '{key}' (capacity={capacity}, window_size={window_size:.2f}s)")
