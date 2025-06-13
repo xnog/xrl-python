@@ -1,13 +1,14 @@
 import asyncio
 import pytest
 import pytest_asyncio
-import redis.asyncio as redis
+import redis.asyncio as redis  # type: ignore
 from xrl import TokenBucketRateLimiter
 import time
+from typing import AsyncGenerator
 
 
 @pytest_asyncio.fixture
-async def redis_client():
+async def redis_client() -> AsyncGenerator[redis.Redis, None]:
     """Create a real Redis client for integration testing."""
     client = redis.from_url("redis://localhost:6379", decode_responses=False)
     try:
@@ -21,7 +22,7 @@ async def redis_client():
 
 
 @pytest_asyncio.fixture
-async def rate_limiter(redis_client):
+async def rate_limiter(redis_client: redis.Redis) -> TokenBucketRateLimiter:
     """Create a TokenBucketRateLimiter instance with real Redis client."""
     return TokenBucketRateLimiter(redis_client)
 
@@ -31,7 +32,7 @@ class TestTokenBucketIntegration:
     """Integration tests for TokenBucketRateLimiter with real Redis."""
 
     @pytest.mark.asyncio
-    async def test_basic_token_acquisition(self, rate_limiter, redis_client):
+    async def test_basic_token_acquisition(self, rate_limiter: TokenBucketRateLimiter, redis_client: redis.Redis) -> None:
         """Test basic token acquisition with real Redis."""
         key = "test:token_bucket:basic"
 
@@ -49,7 +50,7 @@ class TestTokenBucketIntegration:
         assert result is False, "Should be rate limited after exhausting capacity"
 
     @pytest.mark.asyncio
-    async def test_token_refill_over_time(self, rate_limiter, redis_client):
+    async def test_token_refill_over_time(self, rate_limiter: TokenBucketRateLimiter, redis_client: redis.Redis) -> None:
         """Test that tokens refill over time in token bucket."""
         key = "test:token_bucket:refill"
 
@@ -77,7 +78,7 @@ class TestTokenBucketIntegration:
         assert result is True, "Should be able to acquire token after refill"
 
     @pytest.mark.asyncio
-    async def test_acquire_token_with_waiting(self, rate_limiter, redis_client):
+    async def test_acquire_token_with_waiting(self, rate_limiter: TokenBucketRateLimiter, redis_client: redis.Redis) -> None:
         """Test acquire_token method that waits for tokens."""
         key = "test:token_bucket:waiting"
 
@@ -102,7 +103,7 @@ class TestTokenBucketIntegration:
         assert 0.8 <= elapsed <= 1.3, f"Should wait ~1.0s, but waited {elapsed:.3f}s"
 
     @pytest.mark.asyncio
-    async def test_different_users_independent(self, rate_limiter, redis_client):
+    async def test_different_users_independent(self, rate_limiter: TokenBucketRateLimiter, redis_client: redis.Redis) -> None:
         """Test that different users have independent rate limits."""
         key1 = "test:token_bucket:user1"
         key2 = "test:token_bucket:user2"
@@ -126,7 +127,7 @@ class TestTokenBucketIntegration:
         assert result2 is False
 
     @pytest.mark.asyncio
-    async def test_burst_capacity(self, rate_limiter, redis_client):
+    async def test_burst_capacity(self, rate_limiter: TokenBucketRateLimiter, redis_client: redis.Redis) -> None:
         """Test burst capacity handling in token bucket."""
         key = "test:token_bucket:burst"
 
@@ -148,7 +149,7 @@ class TestTokenBucketIntegration:
         assert successful_acquisitions == capacity
 
     @pytest.mark.asyncio
-    async def test_redis_key_expiration(self, rate_limiter, redis_client):
+    async def test_redis_key_expiration(self, rate_limiter: TokenBucketRateLimiter, redis_client: redis.Redis) -> None:
         """Test that Redis keys have appropriate TTL."""
         key = "test:token_bucket:ttl"
 
@@ -169,7 +170,7 @@ class TestTokenBucketIntegration:
         assert 60 <= timestamp_ttl <= 86400
 
     @pytest.mark.asyncio
-    async def test_high_rate_limiting(self, rate_limiter, redis_client):
+    async def test_high_rate_limiting(self, rate_limiter: TokenBucketRateLimiter, redis_client: redis.Redis) -> None:
         """Test high rate scenarios with token bucket."""
         key = "test:token_bucket:high_rate"
 
@@ -195,7 +196,7 @@ class TestTokenBucketIntegration:
         assert result is False, "Should be rate limited immediately after exhausting capacity"
 
     @pytest.mark.asyncio
-    async def test_concurrent_access_same_key(self, rate_limiter, redis_client):
+    async def test_concurrent_access_same_key(self, rate_limiter: TokenBucketRateLimiter, redis_client: redis.Redis) -> None:
         """Test concurrent access to the same rate limit key."""
         key = "test:token_bucket:concurrent"
 
@@ -219,7 +220,7 @@ class TestTokenBucketIntegration:
         assert successful_count == capacity
 
     @pytest.mark.asyncio
-    async def test_fractional_rates(self, rate_limiter, redis_client):
+    async def test_fractional_rates(self, rate_limiter: TokenBucketRateLimiter, redis_client: redis.Redis) -> None:
         """Test token bucket with fractional rates."""
         key = "test:token_bucket:fractional"
 
@@ -246,7 +247,7 @@ class TestTokenBucketIntegration:
         assert result is True, "Should be able to acquire token after refill"
 
     @pytest.mark.asyncio
-    async def test_token_bucket_smoothing(self, rate_limiter, redis_client):
+    async def test_token_bucket_smoothing(self, rate_limiter: TokenBucketRateLimiter, redis_client: redis.Redis) -> None:
         """Test that token bucket provides smooth rate limiting over time."""
         key = "test:token_bucket:smoothing"
 
@@ -278,7 +279,7 @@ class TestTokenBucketIntegration:
         assert result is True, "Should acquire second token after refill"
 
     @pytest.mark.asyncio
-    async def test_large_capacity_burst(self, rate_limiter, redis_client):
+    async def test_large_capacity_burst(self, rate_limiter: TokenBucketRateLimiter, redis_client: redis.Redis) -> None:
         """Test token bucket with large capacity for burst handling."""
         key = "test:token_bucket:large_burst"
 

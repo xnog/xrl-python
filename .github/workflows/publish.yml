@@ -91,14 +91,12 @@ jobs:
         
         # Update version in __init__.py
         sed -i 's/__version__ = ".*"/__version__ = "${{ steps.get_version.outputs.version }}"/' src/xrl/__init__.py
-        sed -i 's/__version__ = ".*"/__version__ = "${{ steps.get_version.outputs.version }}"/' src/xrl/xrl.py
         
         # Show updated versions
         echo "pyproject.toml version:"
         poetry version
-        echo "Package versions:"
+        echo "Package version:"
         cat src/xrl/__init__.py | grep __version__
-        cat src/xrl/xrl.py | grep __version__
     
     - name: Build package
       run: poetry build
